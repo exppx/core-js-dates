@@ -47,10 +47,16 @@ function getTime(date) {
  * '2024-01-30T00:00:00.000Z' => 'Tuesday'
  */
 function getDayName(date) {
-  return new Date(Date.parse(date)).toLocaleDateString('en-US', {
-    weekday: 'long',
-    timeZone: 'UTC',
-  });
+  const names = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+  return names[new Date(date).getUTCDay()];
 }
 
 /**
@@ -142,7 +148,23 @@ function isDateInPeriod(date, period) {
  */
 function formatDate(date) {
   const d = new Date(date);
-  return d.toLocaleString('en-US', { timeZone: 'UTC' });
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+
+  let hour = d.getUTCHours();
+  const minute = d.getUTCMinutes();
+  const second = d.getUTCSeconds();
+
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  hour %= 12;
+  if (hour === 0) hour = 12;
+
+  function pad(n) {
+    return n < 10 ? `0${n}` : `${n}`;
+  }
+
+  return `${month}/${day}/${year}, ${hour}:${pad(minute)}:${pad(second)} ${ampm}`;
 }
 
 /**
@@ -264,27 +286,42 @@ function getQuarter(date) {
  */
 function getWorkSchedule(period, countWorkDays, countOffDays) {
   const schedule = [];
-  const start = new Date(
-    period.start.slice(6),
-    +period.start.slice(3, 5) - 1,
-    period.start.slice(0, 2)
-  );
-  const end = new Date(
-    period.end.slice(6),
-    +period.end.slice(3, 5) - 1,
-    period.end.slice(0, 2)
-  );
 
-  while (start.getTime() <= end.getTime()) {
-    for (let i = 0; i < countWorkDays; i += 1) {
-      if (start.getTime() <= end.getTime()) {
-        schedule.push(start.toLocaleDateString().replaceAll('.', '-'));
-      }
-      start.setDate(start.getDate() + 1);
-    }
-    start.setDate(start.getDate() + countOffDays);
+  function pad(n) {
+    return n < 10 ? `0${n}` : `${n}`;
   }
 
+  const parseDMY = (s) => {
+    const day = parseInt(s.slice(0, 2), 10);
+    const month = parseInt(s.slice(3, 5), 10);
+    const year = parseInt(s.slice(6), 10);
+    return { day, month, year };
+  };
+
+  const startParts = parseDMY(period.start);
+  const endParts = parseDMY(period.end);
+
+  const startUtc = Date.UTC(
+    startParts.year,
+    startParts.month - 1,
+    startParts.day
+  );
+  const endUtc = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const totalDays = Math.floor((endUtc - startUtc) / MS_PER_DAY) + 1;
+  const cycleLen = countWorkDays + countOffDays;
+
+  for (let offset = 0; offset < totalDays; offset += 1) {
+    if (offset % cycleLen < countWorkDays) {
+      const curUtc = startUtc + offset * MS_PER_DAY;
+      const d = new Date(curUtc);
+      const dd = pad(d.getUTCDate());
+      const mm = pad(d.getUTCMonth() + 1);
+      const yyyy = d.getUTCFullYear();
+      schedule.push(`${dd}-${mm}-${yyyy}`);
+    }
+  }
   return schedule;
 }
 
